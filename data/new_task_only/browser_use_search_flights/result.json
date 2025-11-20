@@ -1,0 +1,12 @@
+{
+    "task_id": "browser_use_search_flights",
+    "task": "Find a round-trip flight from NYC to SFO next month and show results.",
+    "final_result_response": "",
+    "action_history": [
+        "<https://kayak.com> -> NAVIGATE",
+        "<input#origin> -> TYPE 'NYC'",
+        "<input#destination> -> TYPE 'SFO'",
+        "<button#search> -> CLICK"
+    ],
+    "thoughts": []
+}

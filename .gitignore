@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Playwright
+.playwright-browsers/
+
+# Generated data and outputs
+data/example/*/
+data/test_output/
+data/hotel_eval_results/
+data/hotel_only/
+data/temp_eval/
+*.png
+*.jpg
+*.jpeg
+
+# Keep directory structure but ignore contents
+!data/example/.gitkeep
+!data/test_output/.gitkeep
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*.bak
+
