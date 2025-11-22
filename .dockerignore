@@ -1,0 +1,46 @@
+# Docker ignore file for TripMind
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+.env
+*.egg-info
+dist
+build
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Test artifacts
+.pytest_cache
+.test_venv
+htmlcov
+.coverage
+
+# Data and outputs (will be recreated)
+data/example
+data/api_tasks
+data/*_result
+
+# Documentation
+*.md
+!README.md
+
+# Playwright browsers (will be installed in container)
+.playwright-browsers
+
+# OS
+.DS_Store
+Thumbs.db

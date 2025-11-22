@@ -26,12 +26,11 @@ Thumbs.db
 # Playwright
 .playwright-browsers/
 
-# Generated data and outputs
-data/example/*/
-data/test_output/
-data/hotel_eval_results/
-data/hotel_only/
-data/temp_eval/
+# Generated data and outputs - ignore all data directory for deployment
+data/
+
+# Documentation files (not needed for deployment)
+documents/
 *.png
 *.jpg
 *.jpeg

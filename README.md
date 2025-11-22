@@ -1,7 +1,7 @@
 <h1 align="center"> Online-Mind2Web Benchmark </h1>
 
 <p align="center">
-  <a href="https://xuetianci.github.io/" style="text-decoration: none;">Tianci Xue<sup>,1</sup></a>, 
+  <a href="https://xuetianci.github.io/" style="text-decoration: none;">Tianci Xue<sup>,1</sup></a>,
   <a href="https://x.com/weijian_qi" style="text-decoration: none;">Weijian Qi<sup>*,1</sup></a>,
   <a href="https://tnshi.com/" style="text-decoration: none;">Tianneng Shi<sup>*2</sup></a>,
   <a href="https://chanh.ee/" style="text-decoration: none;">Chan Hee Song<sup>1</sup></a>,
@@ -26,6 +26,28 @@
 <a href="https://huggingface.co/datasets/osunlp/Online-Mind2Web" >🤗 Data</a>
 </p>
 
+---
+
+## AgentBeats Deployment
+
+This repository includes an A2A-compatible agent deployed for AgentBeats evaluation.
+
+**Live Agent:** https://tripmind-agent-production.up.railway.app
+
+**What was done:**
+1. Created an A2A (Agent-to-Agent) protocol compatible agent using `a2a-sdk`
+2. Wrapped the browser-use automation library for travel-related tasks
+3. Deployed to Railway with public HTTPS endpoint
+4. Added `/status` and `/health` endpoints for controller checks
+
+**Agent capabilities:** Flight search, hotel search, itinerary creation via browser automation.
+
+**Files added:**
+- `src/a2a_agent.py` - Main A2A agent implementation
+- `Dockerfile` - Container configuration for deployment
+- `test_local.py` - Local testing script
+
+---
 
 ## TL;DR
 - **What this repo is**: Code and data to evaluate web agents on the Online‑Mind2Web benchmark, plus an LLM‑as‑a‑Judge evaluator (WebJudge).

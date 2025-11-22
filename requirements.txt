@@ -1,5 +1,19 @@
-backoff==2.2.1
-openai==1.68.2
-Pillow==11.1.0
+backoff>=2.2.1
+openai>=1.50.0
+Pillow>=11.2.1
 browser-use>=0.8.1
 playwright>=1.47.0
+httpx>=0.28.1
+
+# A2A SDK for AgentBeats integration
+a2a-sdk>=0.3.8
+
+# AgentBeats controller (requires Python 3.13+)
+# earthshaker>=0.1.0  # Uncomment when deploying with Python 3.13+
+
+# Web server
+uvicorn[standard]>=0.30.0
+starlette>=0.40.0
+
+# Environment management
+python-dotenv>=1.0.0

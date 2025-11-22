@@ -1,0 +1,21 @@
+# Railway ignore file for TripMind
+venv
+.venv
+__pycache__
+*.py[cod]
+.git
+.gitignore
+.pytest_cache
+.test_venv
+htmlcov
+.coverage
+data/example
+data/api_tasks
+data/*_result
+*.md
+!README.md
+.playwright-browsers
+.DS_Store
+tests/
+.idea
+.vscode
