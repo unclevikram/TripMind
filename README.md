@@ -30,22 +30,123 @@
 
 ## AgentBeats Deployment
 
-This repository includes an A2A-compatible agent deployed for AgentBeats evaluation.
+This repo includes a two-agent architecture for AgentBeats evaluation:
 
-**Live Agent:** https://tripmind-agent-production.up.railway.app
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    AgentBeats Platform                          │
+│                  (https://agentbeats.io)                        │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ A2A task via Cloudflare Tunnel
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              Your Local Machine                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  GREEN AGENT (Port 9002) - Assessment Orchestrator        │  │
+│  │  - Receives tasks from AgentBeats                          │  │
+│  │  - Exposed via Cloudflare Tunnel                           │  │
+│  │  - Sends tasks to White Agent & evaluates results          │  │
+│  └─────────────────────┬─────────────────────────────────────┘  │
+│                        │ A2A / HTTP                              │
+│                        ▼                                         │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  WHITE AGENT (Port 9001) - Browser Automation             │  │
+│  │  - Uses browser-use with Playwright                        │  │
+│  │  - Executes web tasks (flight search, hotel search, etc.)  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-**What was done:**
-1. Created an A2A (Agent-to-Agent) protocol compatible agent using `a2a-sdk`
-2. Wrapped the browser-use automation library for travel-related tasks
-3. Deployed to Railway with public HTTPS endpoint
-4. Added `/status` and `/health` endpoints for controller checks
+### Quick Start
 
-**Agent capabilities:** Flight search, hotel search, itinerary creation via browser automation.
+**1. Install dependencies:**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python -m playwright install chromium
+```
 
-**Files added:**
-- `src/a2a_agent.py` - Main A2A agent implementation
-- `Dockerfile` - Container configuration for deployment
-- `test_local.py` - Local testing script
+**2. Set environment variables:**
+```bash
+export BROWSER_USE_API_KEY="your-browser-use-api-key"
+export OPENAI_API_KEY="your-openai-api-key"  # Optional, for evaluation
+```
+
+**3. Start both agents:**
+```bash
+# Option A: Use the launcher script
+./start_agents.sh
+
+# Option B: Start agents separately
+# Terminal 1 - White Agent (browser automation)
+python -m src.white_agent --port 9001
+
+# Terminal 2 - Green Agent (assessment orchestrator)
+python -m src.green_agent --port 9002 --white-agent-url http://localhost:9001
+```
+
+**4. Verify agents are running:**
+```bash
+curl http://localhost:9001/status  # White Agent
+curl http://localhost:9002/status  # Green Agent
+curl http://localhost:9002/tasks   # View sample tasks
+```
+
+**5. Set up Cloudflare Tunnel (for AgentBeats):**
+```bash
+# Install cloudflared (macOS)
+brew install cloudflared
+
+# Create a quick tunnel to expose Green Agent
+cloudflared tunnel --url http://localhost:9002
+```
+Copy the generated URL (e.g., `https://random-words.trycloudflare.com`).
+
+**6. Register with AgentBeats:**
+1. Go to [AgentBeats](https://agentbeats.io) and log in
+2. Navigate to "Agent Management" → "Create New Agent"
+3. Fill in:
+   - **Name**: TripMind Travel Agent
+   - **Deploy Type**: Remote
+   - **Controller URL**: Your Cloudflare tunnel URL
+   - **Is Green Agent**: ✓ Check this box
+4. Click "Create Agent" and use "Check" to verify connectivity
+
+**7. Run an Assessment:**
+- Click "Start Assessment" in AgentBeats, or test locally:
+```bash
+curl -X POST http://localhost:9002/start-assessment \
+  -H "Content-Type: application/json" \
+  -d '{"white_agent_url": "http://localhost:9001", "task_count": 1}'
+```
+
+### Files
+
+| File | Description |
+|------|-------------|
+| `src/white_agent.py` | Browser automation agent (port 9001) |
+| `src/green_agent.py` | Assessment orchestrator (port 9002) |
+| `start_agents.sh` | Launcher script for both agents |
+| `run.sh` | Script used by AgentBeats controller |
+| `AGENTBEATS_SETUP.md` | Detailed setup documentation |
+
+### Endpoints
+
+**Green Agent (Port 9002):**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/status` | GET | Health check |
+| `/.well-known/agent-card.json` | GET | A2A agent discovery |
+| `/tasks` | GET | List available test tasks |
+| `/start-assessment` | POST | Trigger assessment manually |
+
+**White Agent (Port 9001):**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/status` | GET | Health check |
+| `/.well-known/agent-card.json` | GET | A2A agent discovery |
+| `/execute` | POST | Execute browser task |
 
 ---
 
