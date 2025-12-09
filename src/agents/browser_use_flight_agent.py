@@ -331,16 +331,89 @@ async def run_browser_use_agent(task: str, traj_dir: str, visible: bool = True) 
         # Try to capture screenshots periodically while agent is running (disabled)
         screenshot_interval = 3  # seconds between screenshots
         
+        screenshot_counter = 0
+        
+        debug_printed = False
         while not agent_task.done():
+            if not debug_printed and screenshot_counter == 0:
+                print(f"🔍 browser_session type: {type(agent.browser_session)}")
+                print(f"🔍 browser_session attrs: {[a for a in dir(agent.browser_session) if not a.startswith('_')][:15]}")
+                debug_printed = True
+            
             try:
-                # Check if browser and page exist
-                if (hasattr(agent, 'browser') and 
-                    hasattr(agent.browser, 'page') and 
-                    agent.browser.page):
-                    pass
+                # Access browser session (browser-use uses agent.browser_session)
+                current_page = None
+                
+                if hasattr(agent, 'browser_session') and agent.browser_session:
+                    # Try multiple access paths
+                    if hasattr(agent.browser_session, 'context'):
+                        context = agent.browser_session.context
+                        if hasattr(context, 'pages'):
+                            pages = context.pages
+                            if pages and len(pages) > 0:
+                                current_page = pages[0]
+                    elif hasattr(agent.browser_session, 'get_current_page'):
+                        try:
+                            current_page = await agent.browser_session.get_current_page()
+                        except Exception as e:
+                            if screenshot_counter == 0:
+                                print(f"⚠️  get_current_page() failed: {e}")
+                            pass
+                    elif hasattr(agent.browser_session, 'page'):
+                        current_page = agent.browser_session.page
+                    elif hasattr(agent.browser_session, 'browser_context'):
+                        bc = agent.browser_session.browser_context
+                        if hasattr(bc, 'pages'):
+                            pages = bc.pages
+                            if pages and len(pages) > 0:
+                                current_page = pages[0]
+                
+                if current_page:
+                    try:
+                        # Capture screenshot - might return bytes or base64 string
+                        screenshot_result = await current_page.screenshot()
+                        
+                        # Handle bytes and base64 string
+                        if isinstance(screenshot_result, bytes):
+                            screenshot_bytes = screenshot_result
+                        elif isinstance(screenshot_result, str):
+                            # Check if it's base64-encoded PNG
+                            if screenshot_result.startswith('iVBORw0KGgo') or screenshot_result.startswith('data:image'):
+                                try:
+                                    if screenshot_result.startswith('data:image'):
+                                        screenshot_bytes = decode_data_url_to_png(screenshot_result)
+                                        if screenshot_bytes is None:
+                                            raise Exception("Failed to decode data URL")
+                                    else:
+                                        screenshot_bytes = base64.b64decode(screenshot_result)
+                                except Exception as e:
+                                    raise Exception(f"Failed to decode base64 screenshot: {e}")
+                            elif os.path.exists(screenshot_result):
+                                with open(screenshot_result, 'rb') as f:
+                                    screenshot_bytes = f.read()
+                            else:
+                                raise Exception(f"Unexpected string format: {screenshot_result[:100]}...")
+                        else:
+                            raise Exception(f"Unexpected screenshot result type: {type(screenshot_result)}")
+                        
+                        captured_screenshots.append(screenshot_bytes)
+                        
+                        # Save to trajectory folder
+                        screenshot_path = os.path.join(traj_dir, f"{screenshot_counter}_full_screenshot.png")
+                        with open(screenshot_path, 'wb') as f:
+                            f.write(screenshot_bytes)
+                        
+                        # Verify file was written
+                        file_size = os.path.getsize(screenshot_path) if os.path.exists(screenshot_path) else 0
+                        print(f"📸 Saved screenshot {screenshot_counter} ({file_size} bytes) -> {screenshot_path}")
+                        screenshot_counter += 1
+                    except Exception as e:
+                        print(f"⚠️  Screenshot capture failed: {e}")
+                else:
+                    if screenshot_counter == 0:
+                        print(f"⚠️  current_page is None")
             except Exception as e:
-                # Silently continue if screenshot fails (page might be navigating)
-                pass
+                print(f"⚠️  Screenshot access error: {e}")
             
             # Wait before next screenshot
             try:
@@ -352,11 +425,51 @@ async def run_browser_use_agent(task: str, traj_dir: str, visible: bool = True) 
         # Get the result
         result = await agent_task
         
-        # Final screenshot disabled
+        # Capture final screenshot
         try:
-            pass
+            if hasattr(agent, 'browser_session') and agent.browser_session:
+                if hasattr(agent.browser_session, 'context'):
+                    context = agent.browser_session.context
+                    if hasattr(context, 'pages'):
+                        pages = context.pages
+                        if pages and len(pages) > 0:
+                            current_page = pages[0]
+                            # Capture screenshot - might return bytes or base64 string
+                            screenshot_result = await current_page.screenshot()
+                            
+                            # Handle bytes and base64 string
+                            if isinstance(screenshot_result, bytes):
+                                screenshot_bytes = screenshot_result
+                            elif isinstance(screenshot_result, str):
+                                # Check if it's base64-encoded PNG
+                                if screenshot_result.startswith('iVBORw0KGgo') or screenshot_result.startswith('data:image'):
+                                    try:
+                                        if screenshot_result.startswith('data:image'):
+                                            screenshot_bytes = decode_data_url_to_png(screenshot_result)
+                                            if screenshot_bytes is None:
+                                                raise Exception("Failed to decode data URL")
+                                        else:
+                                            screenshot_bytes = base64.b64decode(screenshot_result)
+                                    except Exception as e:
+                                        raise Exception(f"Failed to decode base64 screenshot: {e}")
+                                elif os.path.exists(screenshot_result):
+                                    with open(screenshot_result, 'rb') as f:
+                                        screenshot_bytes = f.read()
+                                else:
+                                    raise Exception(f"Unexpected string format: {screenshot_result[:100]}...")
+                            else:
+                                raise Exception(f"Unexpected screenshot result type: {type(screenshot_result)}")
+                            
+                            captured_screenshots.append(screenshot_bytes)
+                            screenshot_path = os.path.join(traj_dir, f"{screenshot_counter}_full_screenshot.png")
+                            with open(screenshot_path, 'wb') as f:
+                                f.write(screenshot_bytes)
+                            
+                            # Verify file was written
+                            file_size = os.path.getsize(screenshot_path) if os.path.exists(screenshot_path) else 0
+                            print(f"📸 Saved final screenshot {screenshot_counter} ({file_size} bytes) -> {screenshot_path}")
         except Exception as e:
-            pass
+            print(f"⚠️  Final screenshot capture failed: {e}")
         
         return result
     
@@ -365,7 +478,7 @@ async def run_browser_use_agent(task: str, traj_dir: str, visible: bool = True) 
     history = await run_with_screenshots()
     
     print(f"\n✅ Agent completed")
-    # print(f"📸 Total screenshots captured: {len(captured_screenshots)}")
+    print(f"📸 Total screenshots captured: {len(captured_screenshots)}")
     
     return history, captured_screenshots
 
@@ -391,7 +504,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Run a basic Browser-Use agent and export Online-Mind2Web-style outputs.")
     parser.add_argument("--task", type=str, required=False, default="Find a round-trip flight from NYC to SFO next month and show results.")
     parser.add_argument("--task_id", type=str, required=False, default=None, help="Folder name under data/example for outputs.")
-    parser.add_argument("--base_dir", type=str, required=False, default=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "example")))
+    parser.add_argument("--base_dir", type=str, required=False, default=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "examples")))
     parser.add_argument("--visible", action="store_true", help="Launch browser in visible (non-headless) mode")
     args = parser.parse_args()
 
@@ -430,7 +543,7 @@ async def main() -> None:
             if hasattr(history, '__dict__'):
                 print(f"🔍 DEBUG: History attributes: {list(history.__dict__.keys())[:10]}")
             
-            # Try to convert history to viewable format
+            # Try to convert history to viewable format (skip printing to avoid base64 spam)
             try:
                 if hasattr(history, 'model_dump'):
                     history_dict = history.model_dump()
@@ -438,11 +551,16 @@ async def main() -> None:
                     history_dict = history.dict()
                 else:
                     history_dict = history
-                print("🔍 DEBUG: Raw history content (first 2000 chars):")
-                print(json.dumps(history_dict, indent=2, default=str)[:2000])
+                
+                # Don't print the full history as it may contain large base64 screenshot data
+                print("🔍 DEBUG: History structure extracted (not printing raw content to avoid base64 spam)")
+                
+                # Print only non-image/non-base64 summary
+                if isinstance(history_dict, dict):
+                    safe_keys = [k for k in history_dict.keys() if k not in ['screenshot', 'screenshots', 'image', 'images']]
+                    print(f"🔍 DEBUG: Available history keys: {safe_keys[:10]}")
             except Exception as e:
                 print(f"🔍 DEBUG: Could not serialize history: {e}")
-                print(f"🔍 DEBUG: History str representation: {str(history)[:500]}")
                 
             # Check if history has common browser-use attributes
             for attr in ['history', 'action_history', 'actions', 'steps', 'final_result', 'result']:
@@ -450,8 +568,14 @@ async def main() -> None:
                     val = getattr(history, attr)
                     print(f"🔍 DEBUG: history.{attr} = {type(val).__name__} (length: {len(val) if hasattr(val, '__len__') else 'N/A'})")
             
-            # Extract actions/thoughts from history (ignoring screenshots)
+            # Extract actions/thoughts from history (screenshots already captured manually)
             _history_screenshots, action_history, thoughts, final_result = extract_images_and_actions_from_history(history)
+            
+            # Note: We don't save history_screenshots because we already captured them manually during execution
+            if _history_screenshots:
+                print(f"📸 Found {len(_history_screenshots)} screenshots in history (already captured manually, not saving duplicates)")
+            
+            print(f"📸 Total screenshots: {len(captured_screenshots)} saved to trajectory folder")
             
             print(f"\n🔍 DEBUG: Extracted {len(action_history)} actions from history")
             if action_history:
