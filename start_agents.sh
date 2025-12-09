@@ -30,6 +30,33 @@ fi
 WHITE_AGENT_PORT=${WHITE_AGENT_PORT:-9001}
 GREEN_AGENT_PORT=${GREEN_AGENT_PORT:-9002}
 
+# Function to check if a port is in use and kill the process
+kill_port_if_occupied() {
+    local PORT=$1
+    local PORT_NAME=$2
+    
+    # Check if port is in use (works on macOS and Linux)
+    if command -v lsof > /dev/null 2>&1; then
+        PID=$(lsof -ti:$PORT 2>/dev/null || true)
+        if [ ! -z "$PID" ]; then
+            echo -e "${YELLOW}Port $PORT ($PORT_NAME) is occupied by PID $PID. Killing process...${NC}"
+            kill -9 $PID 2>/dev/null || true
+            sleep 1  # Give it a moment to release the port
+            echo -e "${GREEN}Port $PORT is now free${NC}"
+        fi
+    elif command -v fuser > /dev/null 2>&1; then
+        # Alternative for Linux systems without lsof
+        if fuser $PORT/tcp > /dev/null 2>&1; then
+            echo -e "${YELLOW}Port $PORT ($PORT_NAME) is occupied. Killing process...${NC}"
+            fuser -k $PORT/tcp 2>/dev/null || true
+            sleep 1
+            echo -e "${GREEN}Port $PORT is now free${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Warning: Cannot check if port $PORT is in use (lsof/fuser not found)${NC}"
+    fi
+}
+
 # Parse command line arguments
 MODE="both"
 while [[ $# -gt 0 ]]; do
@@ -70,6 +97,7 @@ done
 
 # Function to start white agent
 start_white_agent() {
+    kill_port_if_occupied $WHITE_AGENT_PORT "White Agent"
     echo -e "${GREEN}Starting White Agent on port $WHITE_AGENT_PORT...${NC}"
     python -m src.white_agent --port $WHITE_AGENT_PORT &
     WHITE_PID=$!
@@ -78,9 +106,11 @@ start_white_agent() {
 
 # Function to start green agent
 start_green_agent() {
+    kill_port_if_occupied $GREEN_AGENT_PORT "Green Agent"
     echo -e "${GREEN}Starting Green Agent on port $GREEN_AGENT_PORT...${NC}"
-    WHITE_AGENT_URL="http://localhost:$WHITE_AGENT_PORT" \
-    python -m src.green_agent --port $GREEN_AGENT_PORT --white-agent-url "http://localhost:$WHITE_AGENT_PORT" &
+    # Support multiple white agent URLs via environment variable
+    WHITE_AGENT_URLS="${WHITE_AGENT_URLS:-http://localhost:$WHITE_AGENT_PORT}"
+    python -m src.green_agent --port $GREEN_AGENT_PORT --white-agent-urls $WHITE_AGENT_URLS &
     GREEN_PID=$!
     echo "Green Agent PID: $GREEN_PID"
 }

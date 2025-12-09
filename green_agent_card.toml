@@ -1,0 +1,32 @@
+# TripMind Green Agent Card
+# Assessment Orchestrator (Assessor)
+# This agent receives assessment requests from AgentBeats and evaluates multiple white agents
+
+[agent]
+name = "TripMind Green Agent"
+description = "Assessment orchestrator for travel agent evaluation. Manages WebJudge-style assessments for browser automation agents. Sends tasks to white agents, evaluates results, and reports metrics."
+version = "1.0.0"
+url = "http://localhost:9002"  # Update with your public URL when deploying
+
+[agent.capabilities]
+tools = [
+    "travel-assessment",
+    "webjudge-eval",
+    "task-orchestration",
+    "metrics-calculation",
+    "multi-assessee-evaluation"
+]
+
+[agent.skills]
+travel-assessment = "Evaluate travel booking agents on flight/hotel search tasks"
+webjudge-eval = "LLM-based evaluation of web navigation results"
+task-orchestration = "Distribute tasks to multiple assessees in parallel"
+metrics-calculation = "Calculate aggregate and per-assessee metrics"
+multi-assessee-evaluation = "Compare performance across multiple assessees"
+
+[agent.metadata]
+type = "assessor"
+category = "evaluation"
+framework = "a2a"
+protocol = "A2A"
+

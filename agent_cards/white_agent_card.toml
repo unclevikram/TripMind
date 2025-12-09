@@ -1,0 +1,35 @@
+# TripMind White Agent Card
+# Browser Automation Agent (Assessee)
+# This agent executes web tasks using browser automation
+
+[agent]
+name = "TripMind White Agent"
+description = "Browser automation agent that executes web tasks using real-time browser interaction. Capable of searching flights, hotels, and navigating travel websites."
+version = "1.0.0"
+# Update URL with your public URL when deploying (e.g., Cloudflare tunnel URL)
+url = "http://localhost:9001"
+
+[agent.capabilities]
+tools = [
+    "web-browsing",
+    "flight-search",
+    "hotel-search",
+    "itinerary-creation",
+    "browser-automation"
+]
+
+[agent.skills]
+web-browsing = "Navigate websites and interact with web pages"
+flight-search = "Search for flights on Google Flights, Kayak, etc."
+hotel-search = "Search for hotels on Booking.com, Hotels.com, etc."
+itinerary-creation = "Create travel itineraries with activities and attractions"
+browser-automation = "Execute browser automation tasks using browser-use and Playwright"
+
+[agent.metadata]
+type = "assessee"
+category = "browser-automation"
+framework = "a2a"
+protocol = "A2A"
+browser = "playwright"
+automation_library = "browser-use"
+

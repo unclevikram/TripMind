@@ -40,9 +40,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers (for local browser-use fallback)
-RUN python -m playwright install chromium || true
-RUN python -m playwright install-deps chromium || true
+# Set Playwright browser path BEFORE installing
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install Playwright browsers and dependencies
+RUN python -m playwright install --with-deps chromium
 
 # Copy application code
 COPY . .
@@ -56,7 +58,6 @@ RUN mkdir -p /app/data
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/.playwright-browsers
 
 # The port will be set by the cloud provider (usually via PORT env var)
 # AgentBeats controller uses port 8080 by default

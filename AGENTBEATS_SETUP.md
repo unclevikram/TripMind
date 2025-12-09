@@ -154,12 +154,19 @@ cloudflared tunnel run tripmind-agent
 1. Go to [AgentBeats](https://agentbeats.io) and log in
 2. Navigate to "Agent Management" → "Create New Agent"
 3. Fill in:
-   - **Name**: TripMind Travel Agent
+   - **Name**: TripMind Travel Agent (or use name from `agent_cards/green_agent_card.toml`)
    - **Deploy Type**: Remote
    - **Controller URL**: Your Cloudflare tunnel URL (e.g., `https://random-words.trycloudflare.com`)
    - **Is Green Agent**: ✓ Check this box
 4. Click "Create Agent"
 5. Use the "Check" button to verify connectivity
+
+**How Agent Discovery Works**: When you provide the Cloudflare tunnel URL, AgentBeats automatically:
+- Makes a GET request to `https://your-tunnel/.well-known/agent-card.json`
+- The A2A protocol automatically exposes this endpoint (no manual upload needed)
+- AgentBeats receives the agent card JSON and discovers capabilities, skills, etc.
+
+**Note**: Agent card TOML files in `agent_cards/` are for reference/documentation. The actual discovery uses the A2A protocol's automatic JSON endpoint. See `AGENTBEATS_AGENT_CARD_DISCOVERY.md` for details.
 
 ### 6. Run an Assessment
 

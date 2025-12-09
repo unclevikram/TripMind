@@ -128,8 +128,11 @@ curl -X POST http://localhost:9002/start-assessment \
 | `src/white_agent.py` | Browser automation agent (port 9001) |
 | `src/green_agent.py` | Assessment orchestrator (port 9002) |
 | `start_agents.sh` | Launcher script for both agents |
+| `start_multiple_assessees.sh` | Launcher script for multiple assessees |
 | `run.sh` | Script used by AgentBeats controller |
+| `agent_cards/` | AgentBeats TOML agent card files |
 | `AGENTBEATS_SETUP.md` | Detailed setup documentation |
+| `AGENTBEATS_MULTIPLE_ASSESSEES.md` | Multi-assessee setup guide |
 
 ### Endpoints
 

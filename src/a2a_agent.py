@@ -238,14 +238,17 @@ class TripMindAgentExecutor(AgentExecutor):
 
             print(f"Starting browser-use agent for task: {task_text[:100]}...")
 
-            # Create browser and LLM
-            browser = Browser(headless=not self.config.visible_browser)
+            # Create LLM (uses browser-use cloud)
             llm = ChatBrowserUse()
+
+            # Use cloud browser for better stealth against CAPTCHA
+            # This uses browser-use's cloud infrastructure with anti-detection
+            browser = Browser(use_cloud=True)
 
             # Augment task for better handling
             augmented_task = self._augment_task(task_text)
 
-            # Create and run agent
+            # Create and run agent with cloud browser
             agent = Agent(task=augmented_task, llm=llm, browser=browser)
             history = await agent.run()
 
@@ -305,7 +308,14 @@ When creating an itinerary:
         return task
 
     def _extract_result_from_history(self, history: Any, original_task: str) -> str:
-        """Extract a meaningful result from the browser-use history."""
+        """Extract a meaningful result from the browser-use history.
+
+        Returns a JSON string with structured data for evaluation:
+        - task: The original task description
+        - action_history: List of actions taken
+        - final_result_response: The final result/answer
+        - status: completed/failed
+        """
         try:
             # Try to get results from history
             items = []
@@ -343,23 +353,27 @@ When creating an itinerary:
                 if is_done:
                     final_result = action_desc
 
-            # Construct result message
-            result_parts = [f"Task: {original_task}\n"]
+            # Return structured JSON response (matches result.json format for WebJudge)
+            result_data = {
+                "task": original_task,
+                "action_history": actions[-50:] if actions else [],  # Last 50 actions
+                "final_result_response": final_result or "Task execution completed.",
+                "status": "completed",
+                "thoughts": []  # Optional, for compatibility
+            }
 
-            if actions:
-                result_parts.append("Actions taken:")
-                for i, action in enumerate(actions[-10:], 1):  # Last 10 actions
-                    result_parts.append(f"  {i}. {action}")
-
-            if final_result:
-                result_parts.append(f"\nFinal Result: {final_result}")
-            else:
-                result_parts.append("\nTask execution completed.")
-
-            return "\n".join(result_parts)
+            return json.dumps(result_data, indent=2)
 
         except Exception as e:
-            return f"Task completed but could not extract detailed results: {str(e)}"
+            # Return error as structured JSON
+            error_data = {
+                "task": original_task,
+                "action_history": [],
+                "final_result_response": f"Error extracting results: {str(e)}",
+                "status": "failed",
+                "thoughts": []
+            }
+            return json.dumps(error_data, indent=2)
 
     async def _send_success_response(
         self,
@@ -405,6 +419,7 @@ def create_app(config: TripMindAgentConfig):
     """Create the Starlette application with A2A and custom endpoints."""
     from starlette.responses import JSONResponse
     from starlette.routing import Route
+    from starlette.requests import Request
 
     # Create agent card
     agent_card = create_agent_card(config.host, config.port, config.base_url)
@@ -439,9 +454,70 @@ def create_app(config: TripMindAgentConfig):
     async def health_endpoint(request):
         return JSONResponse({"healthy": True})
 
+    # Add direct execute endpoint (simpler than A2A protocol)
+    async def execute_endpoint(request: Request):
+        """
+        Direct task execution endpoint.
+
+        POST /execute
+        Body: {"task": "Find flights from NYC to SFO"}
+
+        Returns: {
+            "task": "...",
+            "action_history": [...],
+            "final_result_response": "...",
+            "status": "completed"
+        }
+        """
+        try:
+            body = await request.json()
+            task_text = body.get("task")
+
+            if not task_text:
+                return JSONResponse(
+                    {"error": "Missing 'task' field in request body"},
+                    status_code=400
+                )
+
+            print(f"\n{'='*60}")
+            print(f"[/execute] Received task: {task_text[:200]}...")
+            print(f"{'='*60}\n")
+
+            # Execute the task
+            result_json = await executor._execute_browser_task(task_text)
+
+            # Parse the JSON result
+            try:
+                result_data = json.loads(result_json)
+            except json.JSONDecodeError:
+                # Fallback if result is not JSON
+                result_data = {
+                    "task": task_text,
+                    "action_history": [],
+                    "final_result_response": result_json,
+                    "status": "completed"
+                }
+
+            return JSONResponse(result_data)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JSONResponse(
+                {
+                    "error": str(e),
+                    "task": body.get("task", "") if 'body' in dir() else "",
+                    "action_history": [],
+                    "final_result_response": f"Error: {str(e)}",
+                    "status": "failed"
+                },
+                status_code=500
+            )
+
     # Insert routes at the beginning
     app.routes.insert(0, Route("/status", status_endpoint, methods=["GET"]))
     app.routes.insert(0, Route("/health", health_endpoint, methods=["GET"]))
+    app.routes.insert(0, Route("/execute", execute_endpoint, methods=["POST"]))
 
     # Return the built app directly (not the A2AStarletteApplication)
     return app
