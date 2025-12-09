@@ -206,7 +206,7 @@ export PLAYWRIGHT_BROWSERS_PATH="$(pwd)/.playwright-browsers"
 Step A — Generate an example trajectory folder with the included agent:
 ```bash
 # Visible browser; customize TASK_ID/TASK_TEXT as needed
-python src/agents/browser_use_example.py \
+python src/agents/browser_use_flight_agent.py \
   --task "Find a round-trip flight from NYC to SFO next month and show results." \
   --task_id "browser_use_search_flights" \
   --base_dir "./data/example" \
@@ -436,10 +436,10 @@ Refer to the official project for setup details: [browser-use/browser-use](https
 3. Run the example agent to generate a new task folder:
 ```bash
 # Default example
-python src/agents/browser_use_example.py --visible
+python src/agents/browser_use_flight_agent.py --visible
 
 # Or customize task and id
-python src/agents/browser_use_example.py \
+python src/agents/browser_use_flight_agent.py \
   --task "Find a round-trip flight from NYC to SFO next month and show results." \
   --task_id "my_flights_case" \
   --base_dir "./data/example" \

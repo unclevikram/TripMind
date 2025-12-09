@@ -1,5 +1,4 @@
-#!/bin/bash
-# Convenience script to run the hotel browsing agent
+#!/usr/bin/env bash
 
 # Check for BROWSER_USE_API_KEY
 if [[ -z "$BROWSER_USE_API_KEY" ]]; then
@@ -10,18 +9,18 @@ if [[ -z "$BROWSER_USE_API_KEY" ]]; then
 fi
 
 # Default task if not provided
-TASK="${1:-Find a hotel in Seattle for 2 adults checking in tomorrow and checking out in 3 days with free WiFi and breakfast included. Show results sorted by price.}"
-TASK_ID="${2:-hotel_search_seattle}"
+TASK="${1:-Find a round-trip flight from NYC to SFO next month and show results.}"
+TASK_ID="${2:-flight_search}"
 BASE_DIR="${3:-./data/examples}"
 
-echo "🏨 Running Hotel Browsing Agent"
-echo "================================"
+echo "✈️  Running Flight Search Agent"
+echo "==============================="
 echo "Task: $TASK"
 echo "Task ID: $TASK_ID"
 echo "Output dir: $BASE_DIR/$TASK_ID"
 echo ""
 
-python src/agents/browser_use_hotel_agent.py \
+python src/agents/browser_use_flight_agent.py \
   --task "$TASK" \
   --task_id "$TASK_ID" \
   --base_dir "$BASE_DIR" \

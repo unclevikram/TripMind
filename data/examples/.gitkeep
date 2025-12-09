@@ -1,0 +1,5 @@
+# This folder stores agent run outputs
+# Each agent run creates a subfolder with:
+# - result.json (action history and task info)
+# - trajectory/ (screenshots)
+

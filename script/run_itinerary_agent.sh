@@ -12,7 +12,7 @@ fi
 # Default task if not provided
 TASK="${1:-Plan a 3-day itinerary for visiting San Francisco. Include top attractions, recommended restaurants for each meal, and organize activities by day with estimated timing.}"
 TASK_ID="${2:-itinerary_san_francisco_3days}"
-BASE_DIR="${3:-./data/example}"
+BASE_DIR="${3:-./data/examples}"
 
 echo "🗺️  Running Trip Itinerary Planning Agent"
 echo "========================================"
@@ -32,4 +32,13 @@ echo "✅ Done! Results saved to: $BASE_DIR/$TASK_ID"
 echo ""
 echo "📄 View the itinerary:"
 echo "   cat $BASE_DIR/$TASK_ID/result.json | python -m json.tool"
+echo ""
+echo "📸 View screenshots:"
+SCREENSHOT_COUNT=$(ls -1 "$BASE_DIR/$TASK_ID/trajectory"/*.png 2>/dev/null | wc -l | tr -d ' ')
+if [ "$SCREENSHOT_COUNT" -gt 0 ]; then
+    echo "   ✓ $SCREENSHOT_COUNT screenshots saved to: $BASE_DIR/$TASK_ID/trajectory/"
+    echo "   Open folder: open $BASE_DIR/$TASK_ID/trajectory/"
+else
+    echo "   ⚠️  No screenshots found (may need BROWSER_USE_API_KEY)"
+fi
 

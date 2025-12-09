@@ -1,0 +1,14 @@
+{
+    "task_id": "boston_hotels",
+    "task": "Find 4-star hotels in Seattle starting tomorrow",
+    "final_result_response": "",
+    "action_history": [
+        "Navigated to hotel booking website",
+        "Entered location: Seattle",
+        "Selected check-in date",
+        "Selected check-out date",
+        "Applied filters: WiFi, breakfast",
+        "Clicked search button"
+    ],
+    "thoughts": []
+}

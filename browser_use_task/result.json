@@ -1,0 +1,12 @@
+{
+    "task_id": "browser_use_task",
+    "task": "",
+    "final_result_response": "",
+    "action_history": [
+        "<https://www.google.com/travel/flights> -> NAVIGATE",
+        "<input[aria-label='Where from?']> -> TYPE 'NYC'",
+        "<input[aria-label='Where to?']> -> TYPE 'SFO'",
+        "<Enter> -> PRESS"
+    ],
+    "thoughts": []
+}

@@ -11,7 +11,7 @@ Searches for flights using Google Flights.
 
 **Example usage:**
 ```bash
-python src/agents/browser_use_example.py \
+python src/agents/browser_use_flight_agent.py \
   --task "Find a round-trip flight from SFO to Seattle tomorrow without returning flights and show results." \
   --task_id "my_flight_test" \
   --base_dir "./data/example" \
@@ -196,12 +196,12 @@ export BROWSER_USE_API_KEY="your-key"
 ### Flight Agent
 ```bash
 # Search for one-way flights
-python src/agents/browser_use_example.py \
+python src/agents/browser_use_flight_agent.py \
   --task "Find one-way flights from NYC to Miami next Friday under $200" \
   --visible
 
 # Search for round-trip flights
-python src/agents/browser_use_example.py \
+python src/agents/browser_use_flight_agent.py \
   --task "Find round-trip flights from LAX to Tokyo in December for 2 passengers" \
   --visible
 ```
