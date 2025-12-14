@@ -8,8 +8,10 @@ httpx>=0.28.1
 # A2A SDK for AgentBeats integration
 a2a-sdk>=0.3.8
 
-# AgentBeats controller (requires Python 3.13+)
-# earthshaker>=0.1.0  # Uncomment when deploying with Python 3.13+
+# AgentBeats controller
+# Note: earthshaker provides the 'agentbeats' command for running the controller
+# It handles tunneling, agent lifecycle management, and provides the URL for AgentBeats submission
+earthshaker>=0.1.0
 
 # Web server
 uvicorn[standard]>=0.30.0

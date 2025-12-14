@@ -80,9 +80,12 @@ class AssessmentResult:
     error: Optional[str] = None
 
 
-def create_agent_card(host: str, port: int, base_url: str = None) -> AgentCard:
+def create_agent_card(host: str, port: int, base_url: str = None, agent_id: str = None) -> AgentCard:
     """Create the A2A agent card for the green agent."""
     agent_url = base_url if base_url else f"http://{host}:{port}"
+    # If agent_id is provided (from AgentBeats), include it in the URL
+    if agent_id:
+        agent_url = f"{agent_url}/to_agent/{agent_id}"
 
     return AgentCard(
         name="TripMind Green Agent",
@@ -557,14 +560,146 @@ def create_app(config: GreenAgentConfig):
             "tasks": SAMPLE_TASKS
         })
 
-    def _build_agent_card():
-        """Construct agent card data with verbose logging."""
+    def _detect_base_url_from_request(request: Request) -> Optional[str]:
+        """
+        Detect the public base URL from request headers.
+        This is used when the agent is behind a proxy/controller (like AgentBeats controller).
+        
+        Checks for (in order of priority):
+        - X-AgentBeats-URL (set by AgentBeats controller)
+        - X-Forwarded-Host (set by reverse proxy)
+        - X-Original-Host (set by some proxies)
+        - Forwarded header (RFC 7239 standard)
+        - Host header (direct request)
+        - X-Forwarded-Proto (http/https)
+        - X-Forwarded-Port (if non-standard port)
+        - CF-Connecting-IP and related Cloudflare headers
+        """
+        # Debug: Log all relevant headers
+        print(f"[GREEN AGENT] URL Detection - Headers received:")
+        for header in ['Host', 'X-Forwarded-Host', 'X-Forwarded-Proto', 'X-Forwarded-Port',
+                       'X-AgentBeats-URL', 'X-Original-Host', 'Forwarded', 'X-Real-IP',
+                       'CF-Connecting-IP', 'X-Forwarded-For']:
+            value = request.headers.get(header)
+            if value:
+                print(f"[GREEN AGENT]   {header}: {value}")
+        
+        # Priority 1: Check for AgentBeats-specific URL header
+        agentbeats_url = request.headers.get("X-AgentBeats-URL")
+        if agentbeats_url:
+            print(f"[GREEN AGENT] Using X-AgentBeats-URL: {agentbeats_url}")
+            return agentbeats_url.rstrip("/")
+        
+        # Priority 2: Check for forwarded headers (set by controller/proxy)
+        forwarded_host = request.headers.get("X-Forwarded-Host") or request.headers.get("X-Original-Host")
+        forwarded_proto = request.headers.get("X-Forwarded-Proto", "").lower() or "http"
+        forwarded_port = request.headers.get("X-Forwarded-Port")
+        
+        # Priority 3: Parse RFC 7239 Forwarded header
+        forwarded_header = request.headers.get("Forwarded")
+        if forwarded_header and not forwarded_host:
+            # Parse Forwarded header (e.g., "for=192.0.2.60;proto=https;host=example.com")
+            for part in forwarded_header.split(";"):
+                part = part.strip()
+                if part.lower().startswith("host="):
+                    forwarded_host = part[5:].strip('"')
+                elif part.lower().startswith("proto="):
+                    forwarded_proto = part[6:].strip('"').lower()
+        
+        if forwarded_host:
+            # Handle Cloudflare tunnel URLs (*.trycloudflare.com)
+            # These always use HTTPS on port 443
+            if "trycloudflare.com" in forwarded_host.lower():
+                forwarded_proto = "https"
+                forwarded_port = None
+            
+            # Remove port if included in forwarded_host
+            if ":" in forwarded_host:
+                host = forwarded_host.split(":")[0]
+                embedded_port = forwarded_host.split(":")[1]
+            else:
+                host = forwarded_host
+                embedded_port = None
+            
+            # Use forwarded port if provided, otherwise use embedded port or default
+            port = forwarded_port or embedded_port
+            
+            # For HTTPS on port 443 or HTTP on port 80, don't include port in URL
+            if forwarded_proto == "https" and (port == "443" or port is None):
+                base_url = f"https://{host}"
+            elif forwarded_proto == "http" and (port == "80" or port is None):
+                base_url = f"http://{host}"
+            elif port:
+                base_url = f"{forwarded_proto}://{host}:{port}"
+            else:
+                base_url = f"{forwarded_proto}://{host}"
+            
+            print(f"[GREEN AGENT] Using forwarded URL: {base_url}")
+            return base_url.rstrip("/")
+        
+        # Fallback to Host header if no forwarded headers
+        host_header = request.headers.get("Host")
+        if host_header:
+            # Check if it's a well-known tunnel/cloud URL
+            is_tunnel = any(domain in host_header.lower() for domain in [
+                "trycloudflare.com", "ngrok.io", "loca.lt", "localtunnel.me",
+                "serveo.net", "localhost.run", "cloudflare.com"
+            ])
+            
+            # Check if it includes port
+            if ":" in host_header:
+                host, port = host_header.split(":", 1)
+            else:
+                host = host_header
+                port = None
+            
+            # Determine scheme - default to https for tunnel URLs
+            scheme = request.url.scheme
+            if is_tunnel:
+                scheme = "https"
+            
+            # Build URL
+            if (scheme == "https" and port in ["443", None]) or (scheme == "http" and port in ["80", None]):
+                base_url = f"{scheme}://{host}"
+            elif port:
+                base_url = f"{scheme}://{host}:{port}"
+            else:
+                base_url = f"{scheme}://{host}"
+            
+            print(f"[GREEN AGENT] Using Host header URL: {base_url}")
+            return base_url.rstrip("/")
+        
+        print("[GREEN AGENT] No URL could be detected from request headers")
+        return None
+
+    def _build_agent_card(request: Request = None, agent_id: str = None):
+        """
+        Construct agent card data with verbose logging.
+        
+        Args:
+            request: The HTTP request (used to detect controller URL)
+            agent_id: Optional agent ID for agent-specific URLs
+        """
+        # Try to detect base URL from request if available
+        detected_base_url = None
+        if request:
+            detected_base_url = _detect_base_url_from_request(request)
+        
+        # Use detected URL, then config base_url, then fallback to host:port
+        base_url_to_use = detected_base_url or config.base_url
+        
         print("\n[GREEN AGENT] Building agent card")
-        print(f"[GREEN AGENT] host={config.host} port={config.port} base_url={config.base_url}")
+        print(f"[GREEN AGENT] host={config.host} port={config.port}")
+        print(f"[GREEN AGENT] config.base_url={config.base_url}")
+        print(f"[GREEN AGENT] detected_base_url={detected_base_url}")
+        print(f"[GREEN AGENT] base_url_to_use={base_url_to_use}")
+        print(f"[GREEN AGENT] agent_id={agent_id}")
+        
         card = create_agent_card(
             host=config.host,
             port=config.port,
-            base_url=config.base_url,
+            base_url=base_url_to_use,
+            agent_id=agent_id,
         )
         try:
             data = card.model_dump()
@@ -590,18 +725,19 @@ def create_app(config: GreenAgentConfig):
         return data
 
     # Agent card endpoints for AgentBeats / discovery
-    async def agent_card_endpoint(request):
+    async def agent_card_endpoint(request: Request):
         """Serve agent card at standard well-known path."""
         try:
             print("[GREEN AGENT] Agent card request: /.well-known/agent-card.json")
-            data = _build_agent_card()
+            print(f"[GREEN AGENT] Request headers: Host={request.headers.get('Host')}, X-Forwarded-Host={request.headers.get('X-Forwarded-Host')}")
+            data = _build_agent_card(request=request)
             return JSONResponse(data)
         except Exception as e:
             import traceback
             traceback.print_exc()
             return JSONResponse({"error": f"Failed to generate agent card: {str(e)}"}, status_code=500)
 
-    async def agent_card_with_prefix_endpoint(request):
+    async def agent_card_with_prefix_endpoint(request: Request):
         """
         Serve agent card under to_agent/<agent_id>/.well-known/agent-card.json
         to match AgentBeats expectations.
@@ -609,7 +745,8 @@ def create_app(config: GreenAgentConfig):
         try:
             agent_id = request.path_params.get("agent_id", "")
             print(f"[GREEN AGENT] Agent card request with prefix: agent_id={agent_id}")
-            data = _build_agent_card()
+            print(f"[GREEN AGENT] Request headers: Host={request.headers.get('Host')}, X-Forwarded-Host={request.headers.get('X-Forwarded-Host')}")
+            data = _build_agent_card(request=request, agent_id=agent_id)
             return JSONResponse(data)
         except Exception as e:
             import traceback
@@ -641,6 +778,13 @@ def start_green_agent(
             white_agent_urls = [url.strip() for url in white_agent_urls_str.split(",")]
         else:
             white_agent_urls = [white_agent_urls_str]
+    
+    # AGENT_URL is set by the AgentBeats controller - use it as the base URL
+    # This is the URL that should appear in the agent card
+    agent_url = os.getenv("AGENT_URL")
+    if agent_url:
+        base_url = agent_url
+        print(f"[GREEN AGENT] Using AGENT_URL from controller: {agent_url}")
     
     config = GreenAgentConfig(
         host=host or os.getenv("HOST", "0.0.0.0"),

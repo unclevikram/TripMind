@@ -1,0 +1,58 @@
+{
+  "additionalInterfaces": null,
+  "capabilities": {
+    "extensions": null,
+    "pushNotifications": false,
+    "stateTransitionHistory": null,
+    "streaming": false
+  },
+  "defaultInputModes": [
+    "text"
+  ],
+  "defaultOutputModes": [
+    "text"
+  ],
+  "description": "Assessment orchestrator for travel agent evaluation. Manages WebJudge-style assessments for browser automation agents. Sends tasks to white agents, evaluates results, and reports metrics.",
+  "documentationUrl": null,
+  "iconUrl": null,
+  "name": "TripMind Green Agent",
+  "preferredTransport": "JSONRPC",
+  "protocolVersion": "0.3.0",
+  "provider": null,
+  "security": null,
+  "securitySchemes": null,
+  "signatures": null,
+  "skills": [
+    {
+      "description": "Evaluate travel booking agents on flight/hotel search tasks",
+      "examples": null,
+      "id": "travel-assessment",
+      "inputModes": null,
+      "name": "Travel Agent Assessment",
+      "outputModes": null,
+      "security": null,
+      "tags": [
+        "assessment",
+        "evaluation",
+        "travel"
+      ]
+    },
+    {
+      "description": "LLM-based evaluation of web navigation results",
+      "examples": null,
+      "id": "webjudge-eval",
+      "inputModes": null,
+      "name": "WebJudge Evaluation",
+      "outputModes": null,
+      "security": null,
+      "tags": [
+        "evaluation",
+        "webjudge",
+        "llm"
+      ]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": null,
+  "url": "http://localhost:49865",
+  "version": "1.0.0"
+}

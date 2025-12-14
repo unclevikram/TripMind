@@ -93,23 +93,23 @@ curl http://localhost:9002/status  # Green Agent
 curl http://localhost:9002/tasks   # View sample tasks
 ```
 
-**5. Set up Cloudflare Tunnel (for AgentBeats):**
-```bash
-# Install cloudflared (macOS)
-brew install cloudflared
+**5. Deploy with AgentBeats Controller:**
+The AgentBeats controller automatically handles public access, tunneling, and agent isolation.
 
-# Create a quick tunnel to expose Green Agent
-cloudflared tunnel --url http://localhost:9002
+```bash
+# Start agents with controller
+./run.sh
 ```
-Copy the generated URL (e.g., `https://random-words.trycloudflare.com`).
+
+The AgentBeats controller will automatically provide a public URL for your agent.
 
 **6. Register with AgentBeats:**
 1. Go to [AgentBeats](https://agentbeats.io) and log in
 2. Navigate to "Agent Management" → "Create New Agent"
 3. Fill in:
    - **Name**: TripMind Travel Agent
-   - **Deploy Type**: Remote
-   - **Controller URL**: Your Cloudflare tunnel URL
+   - **Deploy Type**: Hosted (controller-managed)
+   - **Controller URL**: Provided automatically by the AgentBeats controller
    - **Is Green Agent**: ✓ Check this box
 4. Click "Create Agent" and use "Check" to verify connectivity
 
