@@ -37,14 +37,21 @@ This repo includes a two-agent architecture for AgentBeats evaluation:
 │                    AgentBeats Platform                          │
 │                  (https://agentbeats.io)                        │
 └─────────────────────┬───────────────────────────────────────────┘
-                      │ A2A task via Cloudflare Tunnel
+                      │ HTTPS via Cloudflare Tunnel
+                      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│           Simple Controller (Port 8010)                         │
+│  - Provides /status, /agents, /agents/{id} endpoints           │
+│  - Proxies requests to agent via /to_agent/{id}/...            │
+│  - Exposed via Cloudflare Tunnel                                │
+└─────────────────────┬───────────────────────────────────────────┘
+                      │ Proxy
                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              Your Local Machine                                  │
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  GREEN AGENT (Port 9002) - Assessment Orchestrator        │  │
-│  │  - Receives tasks from AgentBeats                          │  │
-│  │  - Exposed via Cloudflare Tunnel                           │  │
+│  │  - Receives tasks from AgentBeats via controller          │  │
 │  │  - Sends tasks to White Agent & evaluates results          │  │
 │  └─────────────────────┬─────────────────────────────────────┘  │
 │                        │ A2A / HTTP                              │
@@ -57,7 +64,7 @@ This repo includes a two-agent architecture for AgentBeats evaluation:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Quick Start
+### Quick Start for AgentBeats
 
 **1. Install dependencies:**
 ```bash
@@ -65,6 +72,11 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 python -m playwright install chromium
+
+# Install cloudflared (required for public tunnel)
+# macOS:
+brew install cloudflared
+# Linux: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation/
 ```
 
 **2. Set environment variables:**
@@ -73,7 +85,74 @@ export BROWSER_USE_API_KEY="your-browser-use-api-key"
 export OPENAI_API_KEY="your-openai-api-key"  # Optional, for evaluation
 ```
 
-**3. Start both agents:**
+**3. Start agents with controller and tunnel (RECOMMENDED):**
+```bash
+./start_agentbeats.sh
+```
+
+This script will:
+- Start the White Agent (browser automation) on port 9001
+- Start the Green Agent (assessment orchestrator) on port 9002
+- Start a simple controller on port 8010
+- Create a Cloudflare tunnel for public access
+- Output the **Controller URL** to submit to AgentBeats
+
+Example output:
+```
+========================================
+  ✅ SETUP COMPLETE!
+========================================
+
+  📡 CONTROLLER URL (submit this to AgentBeats):
+
+     https://xxx-xxx-xxx.trycloudflare.com
+
+  AgentBeats will check these endpoints:
+    • https://xxx.trycloudflare.com/status
+    • https://xxx.trycloudflare.com/agents
+    • https://xxx.trycloudflare.com/agents/{agent_id}
+========================================
+```
+
+**4. Register with AgentBeats:**
+1. Go to [AgentBeats](https://agentbeats.io) and log in
+2. Navigate to "Agent Management" → "Create New Agent"
+3. Fill in:
+   - **Name**: TripMind Green Agent
+   - **Deploy Type**: Remote
+   - **Controller URL**: The URL from step 3 (e.g., `https://xxx.trycloudflare.com`)
+   - **Is Green Agent**: ✓ Check this box
+4. Click "Create Agent"
+5. Click "Check" to verify connectivity - you should see:
+   - Controller Reachable: Yes
+   - Agent Count: 1
+   - Agent Card Content: (JSON with agent details)
+
+**5. Run an Assessment:**
+- Click "Start Assessment" in AgentBeats, or test locally:
+```bash
+curl -X POST http://localhost:9002/start-assessment \
+  -H "Content-Type: application/json" \
+  -d '{"white_agent_url": "http://localhost:9001", "task_count": 1}'
+```
+
+### How AgentBeats Controller Discovery Works
+
+AgentBeats expects a controller that provides these endpoints:
+
+| Endpoint | Response Format | Purpose |
+|----------|-----------------|---------|
+| `GET /status` | `{"maintained_agents": N, "running_agents": N, "starting_command": "..."}` | Check controller is alive |
+| `GET /agents` | `{agent_id: {"url": "...", "internal_port": N, "state": "running"}}` | List available agents |
+| `GET /agents/{id}` | `{"state": "...", "agent_card": "JSON string", ...}` | Get agent details + card |
+| `* /to_agent/{id}/*` | Proxied | Proxy requests to agent |
+
+The agent card is discovered from `/agents/{agent_id}` (the `agent_card` field contains a JSON string).
+
+### Alternative: Local Development (without AgentBeats)
+
+For local testing without AgentBeats:
+
 ```bash
 # Option A: Use the launcher script
 ./start_agents.sh
@@ -86,39 +165,11 @@ python -m src.white_agent --port 9001
 python -m src.green_agent --port 9002 --white-agent-url http://localhost:9001
 ```
 
-**4. Verify agents are running:**
+Verify agents are running:
 ```bash
 curl http://localhost:9001/status  # White Agent
 curl http://localhost:9002/status  # Green Agent
-curl http://localhost:9002/tasks   # View sample tasks
-```
-
-**5. Deploy with AgentBeats Controller:**
-The AgentBeats controller automatically handles public access, tunneling, and agent isolation.
-
-```bash
-# Start agents with controller
-./run.sh
-```
-
-The AgentBeats controller will automatically provide a public URL for your agent.
-
-**6. Register with AgentBeats:**
-1. Go to [AgentBeats](https://agentbeats.io) and log in
-2. Navigate to "Agent Management" → "Create New Agent"
-3. Fill in:
-   - **Name**: TripMind Travel Agent
-   - **Deploy Type**: Hosted (controller-managed)
-   - **Controller URL**: Provided automatically by the AgentBeats controller
-   - **Is Green Agent**: ✓ Check this box
-4. Click "Create Agent" and use "Check" to verify connectivity
-
-**7. Run an Assessment:**
-- Click "Start Assessment" in AgentBeats, or test locally:
-```bash
-curl -X POST http://localhost:9002/start-assessment \
-  -H "Content-Type: application/json" \
-  -d '{"white_agent_url": "http://localhost:9001", "task_count": 1}'
+curl http://localhost:9002/.well-known/agent-card.json  # Agent card
 ```
 
 ### Files
@@ -127,14 +178,21 @@ curl -X POST http://localhost:9002/start-assessment \
 |------|-------------|
 | `src/white_agent.py` | Browser automation agent (port 9001) |
 | `src/green_agent.py` | Assessment orchestrator (port 9002) |
-| `start_agents.sh` | Launcher script for both agents |
-| `start_multiple_assessees.sh` | Launcher script for multiple assessees |
-| `run.sh` | Script used by AgentBeats controller |
-| `agent_cards/` | AgentBeats TOML agent card files |
+| `src/simple_controller.py` | AgentBeats-compatible controller |
+| `start_agentbeats.sh` | **Main script** - starts everything with tunnel |
+| `start_agents.sh` | Launcher for local testing (no tunnel) |
+| `run.sh` | Script called by earthshaker controller |
 | `AGENTBEATS_SETUP.md` | Detailed setup documentation |
-| `AGENTBEATS_MULTIPLE_ASSESSEES.md` | Multi-assessee setup guide |
 
-### Endpoints
+### Controller Endpoints
+
+**Controller (Port 8010):**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/status` | GET | Controller health check (AgentBeats checks this) |
+| `/agents` | GET | List agents with URLs and state |
+| `/agents/{id}` | GET | Agent details including agent_card JSON |
+| `/to_agent/{id}/*` | ALL | Proxy to agent |
 
 **Green Agent (Port 9002):**
 | Endpoint | Method | Description |
@@ -150,6 +208,21 @@ curl -X POST http://localhost:9002/start-assessment \
 | `/status` | GET | Health check |
 | `/.well-known/agent-card.json` | GET | A2A agent discovery |
 | `/execute` | POST | Execute browser task |
+
+### Troubleshooting AgentBeats
+
+**"Agent Count: -" or "Agent Card Content could not be loaded":**
+1. Make sure `/status` returns the exact format: `{"maintained_agents": N, "running_agents": N, ...}`
+2. Check that `/agents/{agent_id}` returns `agent_card` as a JSON **string** (not object)
+3. Verify the tunnel is active and accessible
+
+**Controller not reachable:**
+1. Check cloudflared is running and tunnel URL is valid
+2. Test locally: `curl http://localhost:8010/status`
+3. Test via tunnel: `curl https://your-tunnel-url/status`
+
+**Agent card URL incorrect:**
+The agent card `url` field should be: `https://your-tunnel-url/to_agent/{agent_id}`
 
 ---
 
