@@ -16,6 +16,7 @@ earthshaker>=0.1.0
 # Web server
 uvicorn[standard]>=0.30.0
 starlette>=0.40.0
+fastapi>=0.115.0
 
 # Environment management
 python-dotenv>=1.0.0

@@ -12,10 +12,19 @@
 
 set -e
 
+# Use explicit Python path to avoid environment issues
+PYTHON="/opt/homebrew/bin/python3"
+
+# Verify Python and FastAPI
+if ! $PYTHON -c "from fastapi import FastAPI" 2>/dev/null; then
+    echo "Error: FastAPI not installed. Run: pip3 install --break-system-packages fastapi"
+    exit 1
+fi
+
 CONTROLLER_PORT=8010
 GREEN_AGENT_PORT=9002
 WHITE_AGENT_PORT=9001
-AGENT_ID=$(python3 -c "import uuid; print(str(uuid.uuid4()).replace('-',''))")
+AGENT_ID=$($PYTHON -c "import uuid; print(str(uuid.uuid4()).replace('-',''))")
 
 echo "========================================"
 echo "  TripMind - AgentBeats Setup"
@@ -53,7 +62,7 @@ sleep 1
 
 # Start White Agent
 echo "Starting White Agent on port $WHITE_AGENT_PORT..."
-python3 main.py white --host 0.0.0.0 --port $WHITE_AGENT_PORT &
+$PYTHON main.py white --host 0.0.0.0 --port $WHITE_AGENT_PORT &
 WHITE_PID=$!
 
 # Wait for White Agent
@@ -67,7 +76,7 @@ done
 
 # Start Green Agent
 echo "Starting Green Agent on port $GREEN_AGENT_PORT..."
-python3 main.py green --host 0.0.0.0 --port $GREEN_AGENT_PORT &
+$PYTHON main.py green --host 0.0.0.0 --port $GREEN_AGENT_PORT &
 GREEN_PID=$!
 
 # Wait for Green Agent
@@ -118,7 +127,7 @@ export BASE_URL="$TUNNEL_URL"
 export AGENT_URL="$TUNNEL_URL/to_agent/$AGENT_ID"
 echo "Agent URL: $AGENT_URL"
 
-python3 -m src.simple_controller --host 0.0.0.0 --port $CONTROLLER_PORT &
+$PYTHON -m src.simple_controller --host 0.0.0.0 --port $CONTROLLER_PORT &
 CONTROLLER_PID=$!
 
 # Wait for controller
@@ -140,23 +149,23 @@ echo "Testing endpoints..."
 # Test /status (what AgentBeats checks first)
 echo ""
 echo "  GET /status:"
-curl -s "http://localhost:$CONTROLLER_PORT/status" 2>/dev/null | python3 -m json.tool 2>/dev/null
+curl -s "http://localhost:$CONTROLLER_PORT/status" 2>/dev/null | $PYTHON -m json.tool 2>/dev/null
 
 # Test /agents
 echo ""
 echo "  GET /agents:"
-curl -s "http://localhost:$CONTROLLER_PORT/agents" 2>/dev/null | python3 -m json.tool 2>/dev/null
+curl -s "http://localhost:$CONTROLLER_PORT/agents" 2>/dev/null | $PYTHON -m json.tool 2>/dev/null
 
 # Test /agents/{agent_id} (THIS is where AgentBeats gets the agent_card!)
 echo ""
 echo "  GET /agents/$AGENT_ID:"
 AGENT_INFO=$(curl -s "http://localhost:$CONTROLLER_PORT/agents/$AGENT_ID" 2>/dev/null)
-echo "$AGENT_INFO" | python3 -c "import sys,json; d=json.load(sys.stdin); print('  state:', d.get('state')); card=json.loads(d.get('agent_card','{}')); print('  agent_card.name:', card.get('name')); print('  agent_card.url:', card.get('url'))" 2>/dev/null || echo "  Failed to parse"
+echo "$AGENT_INFO" | $PYTHON -c "import sys,json; d=json.load(sys.stdin); print('  state:', d.get('state')); card=json.loads(d.get('agent_card','{}')); print('  agent_card.name:', card.get('name')); print('  agent_card.url:', card.get('url'))" 2>/dev/null || echo "  Failed to parse"
 
 # Test proxy
 echo ""
 echo "  GET /to_agent/$AGENT_ID/.well-known/agent-card.json:"
-CARD_RESP=$(curl -s "http://localhost:$CONTROLLER_PORT/to_agent/$AGENT_ID/.well-known/agent-card.json" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'  name: {d.get(\"name\")}, url: {d.get(\"url\")}') " 2>/dev/null || echo "  FAILED")
+CARD_RESP=$(curl -s "http://localhost:$CONTROLLER_PORT/to_agent/$AGENT_ID/.well-known/agent-card.json" 2>/dev/null | $PYTHON -c "import sys,json; d=json.load(sys.stdin); print(f'  name: {d.get(\"name\")}, url: {d.get(\"url\")}') " 2>/dev/null || echo "  FAILED")
 echo "$CARD_RESP"
 
 # Test via tunnel
