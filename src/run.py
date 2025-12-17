@@ -70,8 +70,24 @@ def auto_eval(args, task_subset, final_predicted_labels, lock, model):
             messages, text, system_msg = WebVoyager_eval(task_description, screenshot_paths, final_result_response)
         
         elif args.mode == "WebJudge_Online_Mind2Web_eval":
-            for image in sorted(os.listdir(trajectory_images_path), key=lambda x: int(re.findall(r'\d+', x)[0])):
-                screenshot_paths.append(os.path.join(trajectory_images_path, image))
+            # Load all screenshots first
+            all_screenshots = sorted(os.listdir(trajectory_images_path), key=lambda x: int(re.findall(r'\d+', x)[0]))
+            all_screenshot_paths = [os.path.join(trajectory_images_path, img) for img in all_screenshots]
+            
+            # Sample screenshots to avoid rate limits (max 10 screenshots to stay under TPM)
+            MAX_SCREENSHOTS = 5
+            if len(all_screenshot_paths) <= MAX_SCREENSHOTS:
+                screenshot_paths = all_screenshot_paths
+            else:
+                # Sample evenly: always include first and last, then evenly space the rest
+                indices = [0]  # First screenshot
+                step = (len(all_screenshot_paths) - 1) / (MAX_SCREENSHOTS - 1)
+                for i in range(1, MAX_SCREENSHOTS - 1):
+                    indices.append(int(i * step))
+                indices.append(len(all_screenshot_paths) - 1)  # Last screenshot
+                screenshot_paths = [all_screenshot_paths[i] for i in indices]
+                print(f"Sampled {len(screenshot_paths)} screenshots from {len(all_screenshot_paths)} total")
+            
             messages, text, system_msg, record, key_points = asyncio.run(WebJudge_Online_Mind2Web_eval(task_description, action_history, screenshot_paths, model, args.score_threshold))
             output_results["image_judge_record"] = record
             output_results["key_points"] = key_points

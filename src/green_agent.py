@@ -38,21 +38,21 @@ import uvicorn
 SAMPLE_TASKS = [
     {
         "id": "flight_search_1",
-        "task": "Find the cheapest round-trip flight from New York (JFK) to San Francisco (SFO) departing on December 15, 2024 and returning on December 22, 2024.",
+        "task": "Find the cheapest round-trip flight from New York (JFK) to San Francisco (SFO) departing on December 23, 2025 and returning on December 27, 2025.",
         "category": "flight_search",
         "expected_actions": ["navigate", "input_origin", "input_destination", "select_dates", "search"]
     },
     {
         "id": "hotel_search_1",
-        "task": "Find a hotel in Paris, France for 2 adults from January 10-15, 2025 with a rating of 4 stars or higher.",
+        "task": "Find a hotel in San Fransisco for 2 adults from December 23-27, 2025 with a rating of 4 stars or higher.",
         "category": "hotel_search",
         "expected_actions": ["navigate", "input_location", "select_dates", "filter_rating", "search"]
     },
     {
-        "id": "flight_search_2",
-        "task": "Search for one-way flights from Los Angeles (LAX) to Tokyo (NRT) on March 1, 2025, sorted by price.",
-        "category": "flight_search",
-        "expected_actions": ["navigate", "select_one_way", "input_origin", "input_destination", "select_date", "sort_price"]
+        "id": "itinerary_1",
+        "task": "Plan a 3-day itinerary for San Francisco including top attractions, restaurants, and transportation options.",
+        "category": "itinerary",
+        "expected_actions": ["navigate", "search_attractions", "find_restaurants", "plan_route", "research"]
     },
 ]
 
@@ -234,81 +234,191 @@ class GreenAgentExecutor(AgentExecutor):
         return config
 
     async def _run_assessment(self, config: Dict[str, Any]) -> List[AssessmentResult]:
-        """Run the assessment by sending tasks to all white agents (assessees) in parallel."""
+        """Run the assessment by sending tasks to white agents.
+        
+        Supports two modes:
+        1. Comparison mode: Send same task to all agents (for benchmarking)
+        2. Assignment mode: Send different tasks to different agents
+        """
         results = []
         white_agent_urls = config.get("white_agent_urls", self.config.white_agent_urls)
+        assessment_mode = config.get("mode", "comparison")  # "comparison" or "assignment"
+        save_trajectories = config.get("save_trajectories", True)
+        output_dir = config.get("output_dir", "./data/assessment_results")
 
         print(f"[GREEN AGENT] Starting assessment with {len(config['tasks'])} task(s)")
+        print(f"[GREEN AGENT] Mode: {assessment_mode}")
         print(f"[GREEN AGENT] Assessees (White Agents): {len(white_agent_urls)}")
         for i, url in enumerate(white_agent_urls, 1):
             print(f"  {i}. {url}")
 
-        for task_data in config["tasks"]:
-            task_id = task_data["id"]
-            task_text = task_data["task"]
-
-            print(f"\n[GREEN AGENT] Running task: {task_id}")
-            print(f"[GREEN AGENT] Task: {task_text[:100]}...")
-            print(f"[GREEN AGENT] Sending to {len(white_agent_urls)} assessee(s)...")
-
-            # Send task to all white agents in parallel
-            tasks = [
-                self._send_task_to_white_agent_with_metadata(url, task_text, task_id)
-                for url in white_agent_urls
-            ]
+        if assessment_mode == "assignment":
+            # Assignment mode: Each task goes to a specific agent
+            tasks_to_execute = []
+            for task_data in config["tasks"]:
+                task_id = task_data["id"]
+                task_text = task_data["task"]
+                assigned_url = task_data.get("assign_to", white_agent_urls[len(tasks_to_execute) % len(white_agent_urls)])
+                
+                print(f"\n[GREEN AGENT] Task {task_id}: {task_text[:80]}...")
+                print(f"[GREEN AGENT] Assigned to: {assigned_url}")
+                
+                tasks_to_execute.append((assigned_url, task_text, task_id, task_data))
             
-            # Wait for all assessees to complete
-            assessee_results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Execute all assigned tasks in parallel
+            task_futures = [
+                self._send_task_to_white_agent_with_metadata(url, task, tid)
+                for url, task, tid, _ in tasks_to_execute
+            ]
+            assessee_results = await asyncio.gather(*task_futures, return_exceptions=True)
+            
+            # Process results
+            for (assigned_url, task_text, task_id, task_data), assessee_result in zip(tasks_to_execute, assessee_results):
+                result_entry = await self._process_single_result(
+                    assigned_url, task_text, task_id, task_data, assessee_result
+                )
+                results.append(result_entry)
+                
+                # Save trajectory if enabled
+                if save_trajectories and not isinstance(assessee_result, Exception):
+                    await self._save_trajectory(result_entry, assessee_result[1], output_dir)
+        
+        else:
+            # Comparison mode: Send each task to ALL agents (original behavior)
+            for task_data in config["tasks"]:
+                task_id = task_data["id"]
+                task_text = task_data["task"]
+
+                print(f"\n[GREEN AGENT] Running task: {task_id}")
+                print(f"[GREEN AGENT] Task: {task_text[:100]}...")
+                print(f"[GREEN AGENT] Sending to {len(white_agent_urls)} assessee(s)...")
+
+                # Send task to all white agents in parallel
+                tasks = [
+                    self._send_task_to_white_agent_with_metadata(url, task_text, task_id)
+                    for url in white_agent_urls
+                ]
+                
+                # Wait for all assessees to complete
+                assessee_results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Process results from each assessee
-            for idx, (white_agent_url, assessee_result) in enumerate(zip(white_agent_urls, assessee_results)):
-                assessee_name = f"Assessee-{idx+1}"
-                # Extract name from URL if possible
-                if ":" in white_agent_url:
-                    port = white_agent_url.split(":")[-1].split("/")[0]
-                    assessee_name = f"White-Agent-{port}"
-
-                if isinstance(assessee_result, Exception):
-                    # Error occurred
-                    results.append(AssessmentResult(
-                        task_id=task_id,
-                        task=task_text,
-                        assessee_name=assessee_name,
-                        assessee_url=white_agent_url,
-                        success=False,
-                        time_used=0.0,
-                        action_count=0,
-                        final_response="",
-                        error=str(assessee_result)
-                    ))
-                    print(f"[GREEN AGENT] {assessee_name} ({white_agent_url}): ERROR - {assessee_result}")
-                else:
-                    time_used, result = assessee_result
+                for idx, (white_agent_url, assessee_result) in enumerate(zip(white_agent_urls, assessee_results)):
+                    result_entry = await self._process_single_result(
+                        white_agent_url, task_text, task_id, task_data, assessee_result
+                    )
+                    results.append(result_entry)
                     
-                    # Parse the result
-                    if isinstance(result, str):
-                        try:
-                            result = json.loads(result)
-                        except json.JSONDecodeError:
-                            result = {"final_result_response": result, "action_history": []}
-
-                    # Evaluate success (simple heuristic - can be enhanced with WebJudge)
-                    success = self._evaluate_result(task_data, result)
-
-                    results.append(AssessmentResult(
-                        task_id=task_id,
-                        task=task_text,
-                        assessee_name=assessee_name,
-                        assessee_url=white_agent_url,
-                        success=success,
-                        time_used=time_used,
-                        action_count=len(result.get("action_history", [])),
-                        final_response=result.get("final_result_response", "")[:500],
-                    ))
-
-                    print(f"[GREEN AGENT] {assessee_name} ({white_agent_url}): {'SUCCESS' if success else 'FAILED'} ({time_used:.2f}s)")
+                    # Save trajectory if enabled
+                    if save_trajectories and not isinstance(assessee_result, Exception):
+                        await self._save_trajectory(result_entry, assessee_result[1], output_dir)
 
         return results
+
+    async def _process_single_result(
+        self, 
+        white_agent_url: str, 
+        task_text: str, 
+        task_id: str, 
+        task_data: Dict,
+        assessee_result: Any
+    ) -> AssessmentResult:
+        """Process a single agent result and return AssessmentResult."""
+        # Determine agent name from URL
+        assessee_name = f"Assessee"
+        if ":" in white_agent_url:
+            port = white_agent_url.split(":")[-1].split("/")[0]
+            assessee_name = f"White-Agent-{port}"
+
+        if isinstance(assessee_result, Exception):
+            # Error occurred
+            print(f"[GREEN AGENT] {assessee_name} ({white_agent_url}): ERROR - {assessee_result}")
+            return AssessmentResult(
+                task_id=task_id,
+                task=task_text,
+                assessee_name=assessee_name,
+                assessee_url=white_agent_url,
+                success=False,
+                time_used=0.0,
+                action_count=0,
+                final_response="",
+                error=str(assessee_result)
+            )
+        else:
+            time_used, result = assessee_result
+            
+            # Parse the result
+            if isinstance(result, str):
+                try:
+                    result = json.loads(result)
+                except json.JSONDecodeError:
+                    result = {"final_result_response": result, "action_history": []}
+
+            # Evaluate success (simple heuristic - can be enhanced with WebJudge)
+            success = self._evaluate_result(task_data, result)
+
+            print(f"[GREEN AGENT] {assessee_name} ({white_agent_url}): {'SUCCESS' if success else 'FAILED'} ({time_used:.2f}s)")
+            
+            return AssessmentResult(
+                task_id=task_id,
+                task=task_text,
+                assessee_name=assessee_name,
+                assessee_url=white_agent_url,
+                success=success,
+                time_used=time_used,
+                action_count=len(result.get("action_history", [])),
+                final_response=result.get("final_result_response", "")[:500],
+            )
+
+    async def _save_trajectory(
+        self, 
+        result: AssessmentResult, 
+        raw_result: Dict,
+        output_dir: str
+    ) -> None:
+        """Save trajectory to disk in WebJudge-compatible format."""
+        try:
+            # Create output directory structure
+            task_dir = os.path.join(output_dir, result.task_id)
+            os.makedirs(task_dir, exist_ok=True)
+            trajectory_dir = os.path.join(task_dir, "trajectory")
+            os.makedirs(trajectory_dir, exist_ok=True)
+
+            # Parse result if it's a string
+            if isinstance(raw_result, str):
+                try:
+                    raw_result = json.loads(raw_result)
+                except json.JSONDecodeError:
+                    raw_result = {"final_result_response": raw_result, "action_history": []}
+
+            # Note: Screenshots will be copied by post-processing script
+            white_agent_traj_path = raw_result.get("trajectory_path")
+            if white_agent_traj_path:
+                print(f"[GREEN AGENT] White agent trajectory path: {white_agent_traj_path}")
+
+            # Create result.json in WebJudge format
+            result_data = {
+                "task": result.task,
+                "action_history": raw_result.get("action_history", []),
+                "final_result_response": raw_result.get("final_result_response", ""),
+                "status": "completed" if result.success else "failed",
+                "time_used": result.time_used,
+                "assessee_name": result.assessee_name,
+                "assessee_url": result.assessee_url,
+                "screenshot_count": raw_result.get("screenshot_count", 0),
+            }
+
+            # Save result.json
+            result_json_path = os.path.join(task_dir, "result.json")
+            with open(result_json_path, "w") as f:
+                json.dump(result_data, f, indent=2)
+
+            print(f"[GREEN AGENT] Saved trajectory: {result_json_path}")
+
+        except Exception as e:
+            print(f"[GREEN AGENT] Error saving trajectory: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def _send_task_to_white_agent_with_metadata(
         self, white_agent_url: str, task: str, task_id: str
@@ -514,28 +624,109 @@ def create_app(config: GreenAgentConfig):
         Manual endpoint to start an assessment.
 
         POST /start-assessment
-        Body: {
+        
+        Comparison mode (original - sends same task to all agents):
+        {
             "white_agent_urls": ["http://localhost:9001", "http://localhost:9003"],
-            "task_count": 1
+            "task_count": 1,
+            "mode": "comparison"
+        }
+        
+        Assignment mode (new - assigns different tasks to different agents):
+        
+        Option 1 - Use task IDs from SAMPLE_TASKS (easiest):
+        {
+            "mode": "assignment",
+            "tasks": [
+                {"id": "flight_search_1", "assign_to": "http://localhost:9001"},
+                {"id": "hotel_search_1", "assign_to": "http://localhost:9003"},
+                {"id": "itinerary_1", "assign_to": "http://localhost:9005"}
+            ]
+        }
+        
+        Option 2 - Auto-assign to agents in order:
+        {
+            "mode": "assignment",
+            "tasks": [
+                {"id": "flight_search_1"},
+                {"id": "hotel_search_1"},
+                {"id": "itinerary_1"}
+            ]
+        }
+        
+        Option 3 - Full task text (custom tasks):
+        {
+            "mode": "assignment",
+            "tasks": [
+                {
+                    "id": "custom_task_1",
+                    "task": "Find flights from SFO to NYC",
+                    "assign_to": "http://localhost:9001"
+                }
+            ]
         }
         """
         try:
             body = await request.json()
-            # Support both single URL and list of URLs for backward compatibility
-            white_agent_urls = body.get("white_agent_urls", config.white_agent_urls)
-            if "white_agent_url" in body:
-                # Backward compatibility: single URL
-                white_agent_urls = [body["white_agent_url"]]
-            if not isinstance(white_agent_urls, list):
-                white_agent_urls = [white_agent_urls]
             
-            task_count = min(body.get("task_count", 1), len(SAMPLE_TASKS))
+            # Determine mode
+            mode = body.get("mode", "comparison")
+            
+            if mode == "assignment":
+                # Assignment mode: use tasks from request
+                tasks_input = body.get("tasks", [])
+                
+                # Support task IDs: if only "id" is provided, look up from SAMPLE_TASKS
+                tasks_resolved = []
+                for task_spec in tasks_input:
+                    if isinstance(task_spec, str):
+                        # Just a task ID string - look it up
+                        task_id = task_spec
+                        sample_task = next((t for t in SAMPLE_TASKS if t["id"] == task_id), None)
+                        if sample_task:
+                            tasks_resolved.append(sample_task)
+                        else:
+                            raise ValueError(f"Task ID '{task_id}' not found in SAMPLE_TASKS")
+                    elif "task" not in task_spec and "id" in task_spec:
+                        # Has ID but no task text - look up from SAMPLE_TASKS
+                        task_id = task_spec["id"]
+                        sample_task = next((t for t in SAMPLE_TASKS if t["id"] == task_id), None)
+                        if sample_task:
+                            # Merge with any other fields from task_spec (like assign_to)
+                            resolved = sample_task.copy()
+                            resolved.update(task_spec)
+                            tasks_resolved.append(resolved)
+                        else:
+                            raise ValueError(f"Task ID '{task_id}' not found in SAMPLE_TASKS")
+                    else:
+                        # Full task spec provided
+                        tasks_resolved.append(task_spec)
+                
+                assessment_config = {
+                    "mode": "assignment",
+                    "tasks": tasks_resolved,
+                    "white_agent_urls": config.white_agent_urls,  # Default agents
+                    "save_trajectories": body.get("save_trajectories", True),
+                    "output_dir": body.get("output_dir", "./data/assessment_results"),
+                }
+            else:
+                # Comparison mode (backward compatible)
+                white_agent_urls = body.get("white_agent_urls", config.white_agent_urls)
+                if "white_agent_url" in body:
+                    white_agent_urls = [body["white_agent_url"]]
+                if not isinstance(white_agent_urls, list):
+                    white_agent_urls = [white_agent_urls]
+                
+                task_count = min(body.get("task_count", 1), len(SAMPLE_TASKS))
 
-            assessment_config = {
-                "white_agent_urls": white_agent_urls,
-                "tasks": SAMPLE_TASKS[:task_count],
-                "task_count": task_count,
-            }
+                assessment_config = {
+                    "mode": "comparison",
+                    "white_agent_urls": white_agent_urls,
+                    "tasks": SAMPLE_TASKS[:task_count],
+                    "task_count": task_count,
+                    "save_trajectories": body.get("save_trajectories", False),
+                    "output_dir": body.get("output_dir", "./data/assessment_results"),
+                }
 
             results = await executor._run_assessment(assessment_config)
             metrics = executor._calculate_metrics(results)

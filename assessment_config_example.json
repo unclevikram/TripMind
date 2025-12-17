@@ -1,0 +1,29 @@
+{
+  "mode": "assignment",
+  "save_trajectories": true,
+  "output_dir": "./data/my_assessment",
+  "tasks": [
+    {
+      "id": "flight_search_sfo_nyc",
+      "task": "Find the cheapest round-trip flight from San Francisco (SFO) to New York (JFK) departing on March 15, 2025 and returning on March 22, 2025. Use Google Flights.",
+      "assign_to": "http://localhost:9001",
+      "category": "flight_search",
+      "expected_actions": ["navigate", "input_origin", "input_destination", "select_dates", "search"]
+    },
+    {
+      "id": "hotel_search_nyc",
+      "task": "Find a hotel in Manhattan, New York for 2 adults from March 15-22, 2025 with a rating of 4 stars or higher and price under $300/night. Use Booking.com or Hotels.com.",
+      "assign_to": "http://localhost:9003",
+      "category": "hotel_search",
+      "expected_actions": ["navigate", "input_location", "select_dates", "filter_rating", "filter_price", "search"]
+    },
+    {
+      "id": "itinerary_nyc_3day",
+      "task": "Plan a detailed 3-day itinerary for New York City including must-see attractions, restaurants, and transportation between locations. Research on TripAdvisor or similar sites.",
+      "assign_to": "http://localhost:9005",
+      "category": "itinerary_planning",
+      "expected_actions": ["navigate", "search_attractions", "read_reviews", "plan_schedule"]
+    }
+  ]
+}
+

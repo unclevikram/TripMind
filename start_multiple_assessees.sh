@@ -59,7 +59,8 @@ echo -e "${YELLOW}Checking for port conflicts...${NC}"
 kill_port_if_occupied $GREEN_AGENT_PORT "Green Agent"
 
 for i in $(seq 1 $NUM_ASSEESEES); do
-    PORT=$((WHITE_AGENT_START_PORT + i - 1))
+    # Use odd ports: 9001, 9003, 9005, etc. (skip 9002 for green agent)
+    PORT=$((WHITE_AGENT_START_PORT + (i - 1) * 2))
     kill_port_if_occupied $PORT "White Agent $i"
 done
 
@@ -72,7 +73,8 @@ WHITE_URLS=()
 
 # Start multiple white agents
 for i in $(seq 1 $NUM_ASSEESEES); do
-    PORT=$((WHITE_AGENT_START_PORT + i - 1))
+    # Use odd ports: 9001, 9003, 9005, etc. (skip 9002 for green agent)
+    PORT=$((WHITE_AGENT_START_PORT + (i - 1) * 2))
     URL="http://localhost:$PORT"
     WHITE_URLS+=($URL)
     
@@ -111,7 +113,8 @@ echo "  - Start Assessment: POST http://localhost:$GREEN_AGENT_PORT/start-assess
 echo ""
 echo "White Agents (Assessees):"
 for i in $(seq 1 $NUM_ASSEESEES); do
-    PORT=$((WHITE_AGENT_START_PORT + i - 1))
+    # Use odd ports: 9001, 9003, 9005, etc. (skip 9002 for green agent)
+    PORT=$((WHITE_AGENT_START_PORT + (i - 1) * 2))
     echo "  Assessee $i:"
     echo "    - Status: http://localhost:$PORT/status"
     echo "    - Agent Card: http://localhost:$PORT/.well-known/agent-card.json"
